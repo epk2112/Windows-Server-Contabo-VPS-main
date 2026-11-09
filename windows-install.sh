@@ -93,7 +93,7 @@ cd /root/windisk
 mkdir -p winfile win_extract virtio_extract
 
 # ---------- Windows Server 2022 ----------
-wget -c -O windows_server_2022.zip "$WIN_ZIP_URL" || { echo "Failed to download Windows zip"; exit 1; }
+wget -4 -c --tries=10 --retry-connrefused --waitretry=5 -O windows_server_2022.zip "$WIN_ZIP_URL" || { echo "Failed to download Windows zip"; exit 1; }
 unzip -o windows_server_2022.zip -d win_extract || { echo "Failed to unzip Windows zip"; exit 1; }
 rm -f windows_server_2022.zip
 
@@ -108,7 +108,7 @@ rsync -avh --progress winfile/ /mnt/
 umount winfile
 
 # ---------- VirtIO drivers ----------
-wget -c -O virtio.zip "$VIRTIO_ZIP_URL" || { echo "Failed to download virtio zip"; exit 1; }
+wget -4 -c --tries=10 --retry-connrefused --waitretry=5 -O virtio.zip "$VIRTIO_ZIP_URL" || { echo "Failed to download virtio zip"; exit 1; }
 unzip -o virtio.zip -d virtio_extract || { echo "Failed to unzip virtio zip"; exit 1; }
 rm -f virtio.zip
 
