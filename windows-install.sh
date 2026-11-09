@@ -1,37 +1,44 @@
 #!/bin/bash
+# Windows Server 2022 installer for Contabo VPS (run from the Debian 10 Live Rescue System)
+# Downloads the Windows Server 2022 zip and the virtIO zip, extracts them,
+# and uses whichever .iso is found inside each extracted folder.
+
+WIN_ZIP_URL="https://huggingface.co/datasets/bongo2112/server-vps-windows-first-programs/resolve/main/windows_server_2022_january_2023.zip"
+VIRTIO_ZIP_URL="https://huggingface.co/datasets/bongo2112/server-vps-windows-first-programs/resolve/main/virtio.zip"
 
 apt update -y
+apt install grub2 filezilla gparted wimtools unzip rsync wget -y
 
-apt install grub2 filezilla gparted wimtools -y
+# Make sure nothing from a previous install is mounted, then wipe old signatures
+umount /mnt 2>/dev/null
+umount /root/windisk/winfile 2>/dev/null
+umount /root/windisk 2>/dev/null
+swapoff -a 2>/dev/null
+wipefs -a /dev/sda 2>/dev/null
 
-#Get the disk size in GB and convert to MB
+# Get the disk size in GB and convert to MB
 disk_size_gb=$(parted /dev/sda --script print | awk '/^Disk \/dev\/sda:/ {print int($3)}')
 disk_size_mb=$((disk_size_gb * 1024))
 
-#Calculate partition size (25% of total size)
+# Calculate partition size (25% of total size)
 part_size_mb=$((disk_size_mb / 4))
 
-#Create GPT partition table
+# Create GPT partition table (this erases the old Windows installation)
 parted /dev/sda --script -- mklabel gpt
 
-#Create two partitions
+# Create two partitions
 parted /dev/sda --script -- mkpart primary ntfs 1MB ${part_size_mb}MB
 parted /dev/sda --script -- mkpart primary ntfs ${part_size_mb}MB $((2 * part_size_mb))MB
 
-#Inform kernel of partition table changes
+# Inform kernel of partition table changes
 partprobe /dev/sda
-
+sleep 30
+partprobe /dev/sda
+sleep 30
+partprobe /dev/sda
 sleep 30
 
-partprobe /dev/sda
-
-sleep 30
-
-partprobe /dev/sda
-
-sleep 30 
-
-#Format the partitions
+# Format the partitions
 mkfs.ntfs -f /dev/sda1
 mkfs.ntfs -f /dev/sda2
 
@@ -41,15 +48,14 @@ echo -e "r\ng\np\nw\nY\n" | gdisk /dev/sda
 
 mount /dev/sda1 /mnt
 
-#Prepare directory for the Windows disk
+# Prepare directory for the Windows disk
 cd ~
-mkdir windisk
-
+mkdir -p windisk
 mount /dev/sda2 windisk
 
 grub-install --root-directory=/mnt /dev/sda
 
-#Edit GRUB configuration
+# Edit GRUB configuration
 cd /mnt/boot/grub
 cat <<EOF > grub.cfg
 menuentry "windows installer" {
@@ -61,33 +67,43 @@ menuentry "windows installer" {
 EOF
 
 cd /root/windisk
+mkdir -p winfile win_extract virtio_extract
 
-mkdir winfile
+# ---------- Windows Server 2022 ----------
+wget -c -O windows_server_2022.zip "$WIN_ZIP_URL" || { echo "Failed to download Windows zip"; exit 1; }
+unzip -o windows_server_2022.zip -d win_extract || { echo "Failed to unzip Windows zip"; exit 1; }
+rm -f windows_server_2022.zip
 
-wget -O win10.iso https://software-static.download.prss.microsoft.com/dbazure/988969d5-f34g-4e03-ac9d-1f9786c66749/17763.3650.221105-1748.rs5_release_svc_refresh_SERVER_EVAL_x64FRE_es-es.iso
+WIN_ISO=$(find win_extract -type f -iname '*.iso' | head -n 1)
+if [ -z "$WIN_ISO" ]; then
+    echo "No .iso file found inside the Windows zip"; exit 1
+fi
+echo "Using Windows ISO: $WIN_ISO"
 
-mount -o loop win10.iso winfile
-
-rsync -avz --progress winfile/* /mnt
-
+mount -o loop "$WIN_ISO" winfile || { echo "Failed to mount Windows ISO"; exit 1; }
+rsync -avh --progress winfile/ /mnt/
 umount winfile
 
-wget -O virtio.iso https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/archive-virtio/virtio-win-0.1.285-1/virtio-win-0.1.285.iso
+# ---------- VirtIO drivers ----------
+wget -c -O virtio.zip "$VIRTIO_ZIP_URL" || { echo "Failed to download virtio zip"; exit 1; }
+unzip -o virtio.zip -d virtio_extract || { echo "Failed to unzip virtio zip"; exit 1; }
+rm -f virtio.zip
 
-mount -o loop virtio.iso winfile
+VIRTIO_ISO=$(find virtio_extract -type f -iname '*.iso' | head -n 1)
+if [ -z "$VIRTIO_ISO" ]; then
+    echo "No .iso file found inside the virtio zip"; exit 1
+fi
+echo "Using virtIO ISO: $VIRTIO_ISO"
 
-mkdir /mnt/sources/virtio
+mount -o loop "$VIRTIO_ISO" winfile || { echo "Failed to mount virtIO ISO"; exit 1; }
+mkdir -p /mnt/sources/virtio
+rsync -avh --progress winfile/ /mnt/sources/virtio/
+umount winfile
 
-rsync -avz --progress winfile/* /mnt/sources/virtio
-
+# ---------- Inject virtIO drivers into the Windows setup image ----------
 cd /mnt/sources
-
 touch cmd.txt
-
 echo 'add virtio /virtio_drivers' >> cmd.txt
-
 wimlib-imagex update boot.wim 2 < cmd.txt
 
 reboot
-
-
