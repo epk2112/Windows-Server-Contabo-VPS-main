@@ -17,8 +17,12 @@ swapoff -a 2>/dev/null
 wipefs -a /dev/sda 2>/dev/null
 
 # Get the disk size in GB and convert to MB
-disk_size_gb=$(parted /dev/sda --script print | awk '/^Disk \/dev\/sda:/ {print int($3)}')
-disk_size_mb=$((disk_size_gb * 1024))
+disk_size_bytes=$(lsblk -b -d -n -o SIZE /dev/sda | tr -d ' ')
+disk_size_mb=$((disk_size_bytes / 1024 / 1024))
+if [ -z "$disk_size_mb" ] || [ "$disk_size_mb" -le 0 ]; then
+    echo "Could not detect disk size of /dev/sda"; exit 1
+fi
+echo "Detected disk size: ${disk_size_mb} MB"
 
 # Calculate partition size (25% of total size)
 part_size_mb=$((disk_size_mb / 4))
