@@ -27,8 +27,10 @@ echo "Detected disk size: ${disk_size_mb} MB"
 # Calculate partition size (25% of total size)
 part_size_mb=$((disk_size_mb / 4))
 
-# Create GPT partition table (this erases the old Windows installation)
-parted /dev/sda --script -- mklabel gpt
+# Create MBR (msdos) partition table directly (this erases the old Windows installation).
+# The VPS boots in BIOS mode, so MBR is needed; creating it directly avoids the
+# gdisk GPT->MBR conversion, which made /dev/sda1 and /dev/sda2 disappear.
+parted /dev/sda --script -- mklabel msdos
 
 # Create two partitions
 parted /dev/sda --script -- mkpart primary ntfs 1MB ${part_size_mb}MB
@@ -48,14 +50,31 @@ mkfs.ntfs -f /dev/sda2
 
 echo "NTFS partitions created"
 
-echo -e "r\ng\np\nw\nY\n" | gdisk /dev/sda
+partprobe /dev/sda
+udevadm settle
+sleep 5
+
+# Make sure both partitions really exist before continuing
+for i in 1 2 3 4 5 6; do
+    [ -b /dev/sda1 ] && [ -b /dev/sda2 ] && break
+    echo "Waiting for /dev/sda1 and /dev/sda2 ..."
+    partprobe /dev/sda
+    partx -u /dev/sda 2>/dev/null
+    sleep 5
+done
+if [ ! -b /dev/sda1 ] || [ ! -b /dev/sda2 ]; then
+    echo "ERROR: /dev/sda1 or /dev/sda2 does not exist. Stopping."; exit 1
+fi
 
 mount /dev/sda1 /mnt
+mountpoint -q /mnt || { echo "ERROR: could not mount /dev/sda1 on /mnt"; exit 1; }
 
 # Prepare directory for the Windows disk
 cd ~
 mkdir -p windisk
 mount /dev/sda2 windisk
+mountpoint -q /root/windisk || { echo "ERROR: could not mount /dev/sda2 on /root/windisk"; exit 1; }
+df -h /mnt /root/windisk
 
 grub-install --root-directory=/mnt /dev/sda
 
