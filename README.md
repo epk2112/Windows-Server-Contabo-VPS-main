@@ -101,7 +101,29 @@ If Windows is already installed (for example Windows Server 2019 Evaluation), yo
 
   ![text](https://i.ibb.co/0nqRzJG/install-driver.png)
 
-### 5. Allow Remote Access Connection for RDP
+### 5. Configure Your Contabo Static IP
+
+Because the installation script bypasses the default setup, your server won't connect to the internet automatically until you assign its unique static IP configuration. This step is required for the internet connection to go live.
+
+1. Log in to your Contabo Customer Control Panel in a web browser.
+2. Navigate to the **Network** section in the left sidebar and click on **IP Assignment**.
+3. Under the **Included IPs** tab, look at your primary listed IP address and hover over or click the information icon (ⓘ) to reveal your specific network credentials:
+   - IP Address
+   - Gateway
+   - Netmask (Subnet Mask)
+4. Switch back to your Windows Server VPS and locate the networking icon in the bottom right corner of your taskbar (the one indicating "Unidentified network / No Internet").
+5. Right-click the icon and go to **Network & Internet Settings > Change adapter options**.
+6. Right-click your Ethernet adapter, select **Properties**, then double-click **Internet Protocol Version 4 (TCP/IPv4)**.
+7. Choose **Use the following IP address** and fill in the values exactly as you found them in your Contabo panel:
+   - IP address: Your Contabo IP Address
+   - Subnet mask: Your Contabo Netmask
+   - Default gateway: Your Contabo Gateway
+8. Select **Use the following DNS server addresses** and enter the following public DNS values to enable web browsing:
+   - Preferred DNS server: `8.8.8.8`
+   - Alternate DNS server: `1.1.1.1`
+9. Click **OK** on both properties windows to save the configuration. Your internet connection will immediately go live!
+
+### 6. Allow Remote Access Connection for RDP
 
 - Search for `allow remote connections to this computer` and select the first option.
 
